@@ -29,9 +29,12 @@ public class GameHandler extends ApplicationAdapter {
     private float flashTimer = 0f;
     private float totalFlashTime = 0f;
 
+    // Prevent “stalling” by avoiding the same name twice in a row while flashing
+    private int lastFlashIndex = -1;
+
     // Tune these
     private float flashInterval = 0.28f;   // how fast names change
-    private float flashDuration = 10.0f;    // how long the roulette runs
+    private float flashDuration = 10.0f;   // how long the roulette runs
 
     // Beep
     private Sound beep;
@@ -45,7 +48,8 @@ public class GameHandler extends ApplicationAdapter {
 
         names = new Array<>();
         names.addAll(
-            "Luke", "Blake", "Amy", "Bowen", "Joaquin", "Manny", "Noah", "Aidan", "Leslie", "John", "Greta", "Eric", "McKenna", "Andrew", "Mike"
+            "Luke", "Blake", "Amy", "Bowen", "Joaquin", "Manny", "Noah",
+            "Aidan", "Leslie", "John", "Greta", "Eric", "McKenna", "Andrew", "Mike"
         );
 
         beep = generateBeepSound(880, 0.03f); // 880 Hz, 30 ms
@@ -56,8 +60,9 @@ public class GameHandler extends ApplicationAdapter {
     public void render() {
         float dt = Gdx.graphics.getDeltaTime();
 
-        // Start flashing on SPACE
-        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)) {
+        if (Gdx.input.isKeyJustPressed(Input.Keys.SPACE)
+            || Gdx.input.isButtonJustPressed(Input.Buttons.LEFT)) {
+
             if (!flashing && names.size > 0) {
                 startFlashing();
             }
@@ -69,7 +74,16 @@ public class GameHandler extends ApplicationAdapter {
 
             if (flashTimer >= flashInterval) {
                 flashTimer -= flashInterval;
-                flashingName = names.get(rng.nextInt(names.size));
+
+                int idx = rng.nextInt(names.size);
+                if (names.size > 1) {
+                    while (idx == lastFlashIndex) {
+                        idx = rng.nextInt(names.size);
+                    }
+                }
+                lastFlashIndex = idx;
+
+                flashingName = names.get(idx);
                 beep.play(0.6f);
             }
 
@@ -90,10 +104,10 @@ public class GameHandler extends ApplicationAdapter {
         font.draw(batch, line2, 40, 80);
 
         String display = flashing ? flashingName : (selectedName.isEmpty() ? flashingName : selectedName);
-        bigFont.draw(batch, ">> " + display + " <<", 40, Gdx.graphics.getHeight() / 2f);
+        bigFont.draw(batch, ">> " + display + " <<", 40, Gdx.graphics.getHeight() - 20f);
 
         if (!selectedName.isEmpty() && !flashing) {
-            font.draw(batch, "(Selected and removed)", 40, Gdx.graphics.getHeight() / 2f - 40);
+            font.draw(batch, "(Selected and removed)", 40, Gdx.graphics.getHeight() - 80);
         }
 
         if (names.size == 0 && !flashing) {
@@ -108,6 +122,7 @@ public class GameHandler extends ApplicationAdapter {
         flashTimer = 0f;
         totalFlashTime = 0f;
         selectedName = "";
+        lastFlashIndex = -1; // reset so the first flash can be anything
     }
 
     private void finalizeSelection() {
@@ -126,6 +141,7 @@ public class GameHandler extends ApplicationAdapter {
     public void dispose() {
         batch.dispose();
         font.dispose();
+        bigFont.dispose();
         beep.dispose();
     }
 
@@ -135,7 +151,7 @@ public class GameHandler extends ApplicationAdapter {
      */
     private Sound generateBeepSound(int frequencyHz, float durationSeconds) {
         final int sampleRate = 44100;
-        int samples = Math.max(1, (int)(durationSeconds * sampleRate));
+        int samples = Math.max(1, (int) (durationSeconds * sampleRate));
 
         ShortBuffer sb = BufferUtils.newShortBuffer(samples);
         for (int i = 0; i < samples; i++) {
@@ -150,14 +166,8 @@ public class GameHandler extends ApplicationAdapter {
         }
         sb.flip();
 
-        // Convert to byte buffer as required by Sound loader
-        // LibGDX has Sound from file; for raw PCM we use AudioDevice usually.
-        // BUT we can still create a Sound by writing a WAV into memory.
-        // Simplest: write a tiny WAV header + PCM, then use Gdx.audio.newSound with a FileHandle.
-        // Since we want “no external file”, we’ll create it in local storage once.
-
         byte[] wavBytes = WavUtil.pcm16MonoToWav(sb, sampleRate);
-        String tmpName = "beep_" + frequencyHz + "_" + (int)(durationSeconds * 1000) + ".wav";
+        String tmpName = "beep_" + frequencyHz + "_" + (int) (durationSeconds * 1000) + ".wav";
         Gdx.files.local(tmpName).writeBytes(wavBytes, false);
 
         return Gdx.audio.newSound(Gdx.files.local(tmpName));
@@ -210,14 +220,14 @@ public class GameHandler extends ApplicationAdapter {
         }
 
         static void writeLEInt(byte[] b, int off, int v) {
-            b[off]     = (byte) (v & 0xFF);
+            b[off] = (byte) (v & 0xFF);
             b[off + 1] = (byte) ((v >> 8) & 0xFF);
             b[off + 2] = (byte) ((v >> 16) & 0xFF);
             b[off + 3] = (byte) ((v >> 24) & 0xFF);
         }
 
         static void writeLEShort(byte[] b, int off, short v) {
-            b[off]     = (byte) (v & 0xFF);
+            b[off] = (byte) (v & 0xFF);
             b[off + 1] = (byte) ((v >> 8) & 0xFF);
         }
     }
